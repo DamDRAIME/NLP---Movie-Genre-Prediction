@@ -3,18 +3,23 @@ The goal of this challenge is to build a Machine Learning model to predict the
 genres of a movie given its synopsis.
 """
 
-from typing import List
+from typing import List, Tuple, Union
 import pandas as pd
+import statistics as stat
 import re
 import sklearn
 import nltk
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
 nltk.download("punkt")
 nltk.download("wordnet")
 nltk.download("stopwords")
+
+dataset = Union[str, pd.DataFrame]
 
 
 def remove_from_dataset(df: pd.DataFrame, genres: List[str]) -> pd.DataFrame:
@@ -77,37 +82,116 @@ def clean_synopsis(
     return synopsis
 
 
-def train(train_file_name):
+def apk(
+        actual: List[List[str]],
+        predicted: List[List[str]],
+        k: int=10
+        ) -> float:
+    """
+    Compute the average precision at k.
+
+    This function will compute the average precision at k between two lists of
+    items. Note that the order of the items in the lists does not matter. Also
+    the number of items in the two lists can be different.
+    :param actual: list of list of items that are to be predicted
+    :param predicted: list of list of items that are predicted
+    :param k: the maximum number of predicted elements
+    :return: float, average precision at k
+    """
+    if len(predicted)>k:
+        predicted = predicted[:k]
+
+    score = 0.0
+    num_hits = 0.0
+
+    for i,p in enumerate(predicted):
+        if p in actual and p not in predicted[:i]:
+            num_hits += 1.0
+            score += num_hits / (i+1.0)
+
+    if not actual:
+        return 0.0
+
+    return score / min(len(actual), k)
+
+
+def mapk(
+        actual: List[List[str]],
+        predicted: List[List[str]],
+        k: int=10
+        ) -> float:
+    """
+    Compute the mean average precision at k.
+
+    This function will compute the mean average precision at k between two
+    lists of items. Note that the order of the items in the lists does not
+    matter. Also the number of items in the two lists can be different.
+    :param actual: list of list of items that are to be predicted
+    :param predicted: list of list of items that are predicted
+    :param k: the maximum number of predicted elements
+    :return: float, mean average precision at k
+    """
+    return stat.mean([apk(a, p, k) for a, p in zip(actual, predicted)])
+
+
+def train(
+        train_dataset: dataset,
+        train_validation_split: float=0.0,
+        verbose: int=1
+        ) -> Tuple[
+        List[str],
+        TfidfVectorizer,
+        OneVsRestClassifier,
+        MLPClassifier]:
     """
     Train the machine learning model on a training dataset.
 
-    This function is called on a dataset saved in the train_file_name csv file.
-    The dataset is used for training the model which is then
-    saved in global variables.
-    :return: empty string
+    This function is called on a dataset stored in the train_dataset parameter.
+    It can either be a DataFrame or a csv file.
+    The dataset is used for training the model which is then returned along
+    with the unique genres of the provided dataset.
+    :param train_dataset: name of the csv file containing the dataset or a
+    Pandas DataFrame
+    :param train_validation_split: float defining the percentage of the
+    dataset that should be reserved for validation. By default there is not
+    split (optional)
+    :param verbose: parameter to control how much information you want to have
+    during training (optional)
+    :return: genres, *model
     """
     # Load the dataset
-    df = pd.read_csv(train_file_name, sep=",")
+    df = pd.read_csv(train_dataset, sep=",") if type(train_dataset) == str \
+        else train_dataset
 
     # Remove duplicate rows
+    if verbose >= 1:
+        print('Removing duplicated data...')
     df.drop_duplicates(subset=["synopsis"], keep="first", inplace=True)
 
-    # Remove IMAX as it is not a genre, and Film-noir as we don't have many
-    # examples
-    df = remove_from_dataset(df, ["IMAX", "Film-Noir"])
-
     # Get list of genres remaining in the dataset
-    genre_vectorizer = sklearn.feature_extraction.text.CountVectorizer(
+    genre_vectorizer = CountVectorizer(
         tokenizer=lambda x: x.split(" ")
     )
     genre_vectorizer.fit(df["genres"])
     genres: List[str] = genre_vectorizer.get_feature_names()
+    if verbose >= 1:
+        print('Unique genres: {}'.format(genres))
 
     # Clean the synopsis of each movie
+    if verbose >= 1:
+        print('Cleaning synopses...')
     df["clean_synopsis"] = df["synopsis"].apply(lambda x: clean_synopsis(x))
 
+    # Splitting dataset
+    if train_validation_split > 0.0:
+        if verbose >= 1:
+            print('Splitting dataset into a training set and a validation set')
+        df, df_val = train_test_split(df, test_size=train_validation_split)
+
     # Extract TFIDF vectors for each movie
-    tfidf_vectorizer = sklearn.feature_extraction.text.TfidfVectorizer(
+    if verbose >= 1:
+        print('Extracting TFIDF vectors for each movie...')
+    tfidf_vectorizer = TfidfVectorizer(
         max_df=0.95, min_df=2, max_features=6000, stop_words="english"
     )
     tfidf = tfidf_vectorizer.fit_transform(df["clean_synopsis"])
@@ -116,6 +200,8 @@ def train(train_file_name):
     y = genre_vectorizer.transform(df["genres"]).toarray()
 
     # Create the model: LogisticRegression -> NN
+    if verbose >= 1:
+        print('Creating and training the model...')
     clf_log = OneVsRestClassifier(
         LogisticRegression(C=1.8, solver="lbfgs", penalty="l2", max_iter=250)
     )
@@ -130,20 +216,40 @@ def train(train_file_name):
     )
     clf_nn.fit(y_pred_int, y)
 
-    return tfidf_vectorizer, genres, clf_log, clf_nn
+    # Get the mean average precision score of the model on the validation set
+    if train_validation_split > 0.0 and verbose >= 1:
+        print('Assessing model\'s performance on validation set...')
+        df_pred = predict(df_val, genres, tfidf_vectorizer, clf_log, clf_nn)
+        map = mapk(df_val["genres"], df_pred["genres"], k=5)
+        print('Mean Average Precision at 5 on validation set = {}'.format(map))
+
+    return genres, tfidf_vectorizer, clf_log, clf_nn
 
 
-def predict(test_file_name, tfidf_vectorizer, genres, clf_log, clf_nn):
+def predict(
+        test_dataset: dataset,
+        genres: List[str],
+        tfidf_vectorizer: TfidfVectorizer,
+        clf_log: OneVsRestClassifier,
+        clf_nn: MLPClassifier):
     """
     Predict the 5 most probable genres for a each movie of a given dataset.
 
-    This function can be called on a dataset saved in a test_file_name csv file.
-    A model is then used to predict the 5 most probable
-    genres of each movie from the dataset.
+    This function can be called on a dataset stored in a csv file or directly
+    in a Pandas DataFrame.
+    A model is then used to predict the 5 most probable genres of each movie
+    from the dataset.
+    :param test_dataset: name of the csv file or the Pandas DataFrame
+    containing the movies' synopses for which the genres need to be predicted
+    :param genres: list of the different unique genres
+    :param tfidf_vectorizer: vectorizer to extract features from synopses
+    :param clf_log: a OneVsRest classifier for the first part of the model
+    :param clf_nn: a neural network for the second and last part of the model
     :return: empty string
     """
     # Load the dataset
-    df = pd.read_csv(test_file_name, sep=",")
+    df = pd.read_csv(test_dataset, sep=",") if type(test_dataset) == str \
+        else test_dataset
 
     # Clean the synopsis of each movie
     df["clean_synopsis"] = df["synopsis"].apply(lambda x: clean_synopsis(x))
@@ -174,4 +280,10 @@ def predict(test_file_name, tfidf_vectorizer, genres, clf_log, clf_nn):
 
     # Save the predictions in submission.csv
     df_submit.to_csv(path_or_buf="submission.csv", sep=",", index=False)
-    return "A submission.csv file has been created"
+    return df_submit
+
+
+a = (mapk([['Drama', 'Thriller'], ['Adventure', 'Comedy', 'Action']],
+     [['Family', 'Action', 'Comedy'], ['Adventure', 'Action', 'Comedy']], 2))
+print(type(a))
+print(a)
