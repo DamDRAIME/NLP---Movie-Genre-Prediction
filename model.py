@@ -177,16 +177,17 @@ def train(
     if verbose >= 1:
         print('Unique genres: {}'.format(genres))
 
-    # Clean the synopsis of each movie
-    if verbose >= 1:
-        print('Cleaning synopses...')
-    df["clean_synopsis"] = df["synopsis"].apply(lambda x: clean_synopsis(x))
-
     # Splitting dataset
     if train_validation_split > 0.0:
         if verbose >= 1:
             print('Splitting dataset into a training set and a validation set')
         df, df_val = train_test_split(df, test_size=train_validation_split)
+        df_val.reset_index(inplace=True)
+
+    # Clean the synopsis of each movie
+    if verbose >= 1:
+        print('Cleaning synopses...')
+    df["clean_synopsis"] = df["synopsis"].apply(lambda x: clean_synopsis(x))
 
     # Extract TFIDF vectors for each movie
     if verbose >= 1:
@@ -220,7 +221,7 @@ def train(
     if train_validation_split > 0.0 and verbose >= 1:
         print('Assessing model\'s performance on validation set...')
         df_pred = predict(df_val, genres, tfidf_vectorizer, clf_log, clf_nn)
-        map = mapk(df_val["genres"], df_pred["genres"], k=5)
+        map = mapk(df_val["genres"], df_pred["predicted_genres"], k=5)
         print('Mean Average Precision at 5 on validation set = {}'.format(map))
 
     return genres, tfidf_vectorizer, clf_log, clf_nn
@@ -280,10 +281,5 @@ def predict(
 
     # Save the predictions in submission.csv
     df_submit.to_csv(path_or_buf="submission.csv", sep=",", index=False)
+
     return df_submit
-
-
-a = (mapk([['Drama', 'Thriller'], ['Adventure', 'Comedy', 'Action']],
-     [['Family', 'Action', 'Comedy'], ['Adventure', 'Action', 'Comedy']], 2))
-print(type(a))
-print(a)
