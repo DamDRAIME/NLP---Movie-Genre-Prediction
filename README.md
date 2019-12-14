@@ -2,6 +2,38 @@
 Natural Language Processing aims to interpret natural language data. Here is an implementation of a model designed to predict the most probable genres for a movie given its synopsis.
 
 ## Model
+Many approaches have been considered when building this model. Here is an explanation of the implementation that gave the best results.
+The main steps involved in this model are:
+1. Cleaning the dataset
+2. Extracting features
+3. Classifying
+
+### Cleaning the dataset
+#### Remove duplicates
+The first step is to make sure there aren't any duplicates in the dataset. This is done my comparing synopses. We do this to avoid submitting the same examples to our model in order to avoid overfitting.
+#### Cleaning synopses
+The second step cleans synopsis of each movie to increase the robustness of our model. Below is a non-exhaustive list of operations that can be implemented to clean a text.
+- Removing stop-words since they do not contain any information
+- Stemming or Lemmatizing the text as we don't want our model to learn that "fear" is a word often present in synopses of horror movies and thus is a good indicator for that genre, but fail to correctly label a new movie with the word "fearing" in its synopsis because no movie in the training set contained the word "fearing" in its synopsis.
+- Keeping only alphanumeric characters. This depends heavily on the task at hand but in this case, we assumed that characters such #, $, &, ^, etc. didn't bear any relevant information for the classifier. We kept numeric characters as dates can be good indicators to predict war and sci-fi movies.
+- Converting the case to lowercase
+
+
+Hence a synopsis such as:
+```
+A 17 year-old aristocrat falls in love with a kind but poor artist aboard the luxurious, ill-fated R.M.S. Titanic
+```
+will be converted to:
+```
+17 year old aristocrat fall love kind poor artist aboard luxuri ill fate R M S Titan
+```
+
+### Extracting features
+Many approaches can be considered here to extract features that will be used by the classifier.
+Non-Negative Matrix Factorization (NMF) and Latent Dirichlet Allocation (LDA) can be used to extract latent topics from a text. However, one has to decide how many of those topics should be discovered. This is not as straightforward as one thinks. Those two approaches have been implemented but didn't lead to great results. Instead a TFI-IDF approach has been used to extract features. Many parameters also need to be tuned with this approach, though.
+
+### Classifying
+
 
 ## Usage
 To train the model you simply need to submit a dataset containing for each movie a synopsis and its associated genres. This dataset will be stored in a csv file. Two columns must be part of this dataset: `synopsis`, and `genres`. Other columns could also be included, such as the `id`, and the `title`, but these won't be used to train the model. Below is an example of such a dataset:
