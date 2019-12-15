@@ -36,7 +36,8 @@ Non-Negative Matrix Factorization (NMF) and Latent Dirichlet Allocation (LDA) ca
 
 
 ## Usage
-To train the model you simply need to submit a dataset containing for each movie a synopsis and its associated genres. This dataset will be stored in a csv file. Two columns must be part of this dataset: `synopsis`, and `genres`. Other columns could also be included, such as the `id`, and the `title`, but these won't be used to train the model. Below is an example of such a dataset:
+### Train
+To train the model you simply need to submit a dataset containing for each movie a synopsis and its associated genres. This dataset will be stored in a csv file or directly in a Pandas DataFrame. Two columns must be part of this dataset: `synopsis`, and `genres`. Other columns could also be included, such as the `id`, and the `title`, but these won't be used to train the model. Below is an example of such a dataset:
 
 | synopsis | genres |
 | --- | --- |
@@ -48,15 +49,21 @@ To train the model you simply need to submit a dataset containing for each movie
 
 _Note that the different genres of a movie are separated by commas._
 
-Then pass as argument the name of your csv file to the `train` function to train your model.
+Then pass as argument the name of your csv file (or your Pandas DataFrame) to the `train` function to train your model.
 ```python
-genres, tfidf_vectorizer, clf_log, clf_nn = train("train.csv")
+genres, tfidf_vectorizer, clf_log, clf_nn = train(dataset="train.csv")
 ```
 or
 ```python
-genres, *model = train("train.csv")
+genres, *model = train(dataset=df_train)
 ```
 
+If you want to split your dataset into a training set and a validation set, you can use the second parameter of the `train` function: `train_validation_split`. It refers to the percentage of the dataset that should be kept for validation. If this parameter's value is greater than 0.0, then the dataset will be split in two. The validation set will be used to assess the performance of your model via the Mean Accuracy Precision at k=5. Here is an example of usage:
+```python
+genres, *model = train(dataset=df_train, train_validation_split=0.2)
+```
+
+### Predict
 Once the model is trained, the unique genres will be returned as well as the different classifiers and vectorizers constituing the model.
 You can now test your model on a new dataset containing only synopses. Use the `predict` function. This function will create a submission.csv file containing the 5 predicted genres for each movie/synopsis.
 ```python
@@ -64,7 +71,7 @@ predict("test.csv", genres, tfidf_vectorizer, clf_log, clf_nn)
 ```
 or
 ```python
-predict("test.csv", genres, *model)
+predict(df_test, genres, *model)
 ```
 
 ## Requirements
