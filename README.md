@@ -1,5 +1,5 @@
 # NLP - Movie Genres Prediction
-Natural Language Processing aims to interpret natural language data. Here is an implementation of a model designed to predict the most probable genres for a movie given its synopsis.
+Natural Language Processing aims to interpret natural language data. Here is an implementation of a model designed to predict the 5 most probable genres for a movie given its synopsis.
 
 ## Model
 Many approaches have been considered when building this model. Here is an explanation of the implementation that gave the best results.
@@ -33,7 +33,10 @@ Many approaches can be considered here to extract features that will be used by 
 Non-Negative Matrix Factorization (NMF) and Latent Dirichlet Allocation (LDA) can be used to extract latent topics from a text. However, one has to decide how many of those topics should be discovered. This is not as straightforward as one thinks. Those two approaches have been implemented but didn't lead to great results. Instead a TFI-IDF approach has been used to extract features. Many parameters also need to be tuned with this approach, though.
 
 ### Classifying
+Once each synopsis has been vectorized, we can use classifiers to solve our multi-label multi-class classification task. Indeed a movie can belong to multiple classes at the same time. In other words, the classes are not mutually exclusive and there are certainly classes dependencies.
+Our model consists in first using one binary classifier per unique genre. Those logistic regression classifiers will output a value between 0 and 1 for which a probabilistic interpretation can be used. For example, if the classifier for the genre "horror" returns 0.9 for a given synopsis then we can interpret that this classifier is quite convinced that this synopsis belongs to a horror movie. Each synopsis is thus converted in a vector which length is equal to the number of unique genres in the dataset. Each element of this vector indicates the probability that this movie belongs to a specific genre. We could already stop here and return the five most probable genres for a movie. However, the drawback of this approach is that it doesn't capture the dependencies between classes. Indeed, one classifier doesn't take into account the output of the other classifier to make its decision.
 
+One way to remedy this is to use a neural network on the outputs of the different logistic regression classifiers. This neural network has a sigmoid activation function for the last layer and is trained using a binary cross-entropy loss function for each class.
 
 ## Usage
 ### Train
